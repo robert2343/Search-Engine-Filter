@@ -1,0 +1,166 @@
+#!/usr/bin/python
+
+import urllib.request, urllib.error, urllib.parse
+from bs4 import BeautifulSoup
+import time
+import webbrowser
+import sys
+
+def createTitle(textls):
+    output = ""
+    for i in textls:
+        if isinstance(i, str):
+            output += i.strip() + " "
+        else:
+            output += createTitle(i)
+    return output
+
+def findPlace(link, text, biglist, blacklist, slist, llist):
+    domain = ""
+    try:
+        domain = link.split("/")[2].strip()
+    except:
+        domain = "failed"
+    if domain not in biglist and link not in blacklist and domain not in blacklist:
+        slist.append((link, text))
+    elif domain in biglist and link not in blacklist and domain not in blacklist:
+        llist.append((link, text))
+
+thresh = 100
+datafiles = []
+browse = False
+n = len(sys.argv)
+skip = False
+if(n > 1 and (sys.argv[1] == "-h" or sys.argv[1] == "--help")):
+    print("use: search [OPTIONS] [DATAFILES]")
+    print("-t, --threshold: set the threshold for what constitutues a large site; default is 100")
+    print("-h, --help: display this help information and exit. only works if this is the first argument passed. otherwise it is treated as a data file and will probably produce an error")
+    print("-b, --browser: open the search results in the browser instead of printing them to the command line")
+    print("any errors in data files entered are essentially ignored")
+    print("see the README for more information")
+else:
+    for arg in range(len(sys.argv)):
+        if(not skip):
+            if(sys.argv[arg][0] == chr(45)): #-
+                for i in range(len(sys.argv[arg])):
+                    if(sys.argv[arg][i] == chr(116)): #t
+                        try:
+                            thresh = int(sys.argv[arg + 1])
+                            skip = True
+                        except Exception as e:
+                            print(e)
+                            print(sys.argv[arg] + " must be followed by an integer number.")
+                    elif(sys.argv[arg][i] == chr(98)): #b
+                        browse = True
+            elif("search" not in sys.argv[arg]):
+                datafiles.append(sys.argv[arg])
+        else:
+            skip = False
+
+    query = input("Enter your search query: ")
+    query = query.replace("’", "'").replace("%", "%25").replace(" ", "%20").replace("'", "%27").replace(",", "%2C").replace('"', "%22").replace(";", "%3B").replace(":", "%3A").replace("!", "%21").replace("@", "%40").replace("#", "%23").replace("$", "%24").replace("^", "%5E").replace("&", "%26").replace("*", "%2A").replace("(", "%28").replace(")", "%29").replace("+", "%2B").replace("{", "%7B").replace("}", "%7D").replace("[", "%5B").replace("]", "%5D").replace("|", "%7C").replace("\\", "%5C").replace("<", "%3C").replace(">", "%3E").replace("?", "%3F").replace("`", "%60").strip()
+
+    datalines = []
+    successful = []
+    for i in datafiles:
+        try:
+            currfile = open(i, "r")
+            currlines = currfile.readlines()
+            for j in currlines:
+                datalines.append(j.strip())
+            successful.append(i)
+        except Exception as e:
+            print(e)
+    print("the threshold is " + str(thresh))
+    print("the data files used are " + str(successful))
+    
+    nxtpg = True
+    slist = []
+    llist = []
+    biglist = []
+    for i in datalines:
+        try:
+            if int(i.split()[0]) > thresh:
+                biglist.append(i.split()[1])
+        except:
+            print("the data file was invalid at the following line:", i)
+    blacklist = [
+    "https://disroot.org",
+    "https://howto.disroot.org",
+    "https://state.disroot.org",
+    "https://user.disroot.org",
+    "search.disroot.org",
+    "search.disroot.org",
+    "searx.github.io",
+    "/",
+    "/about",
+    "/preferences",
+    "127.0.0.1:8888",
+    "searx.space",
+    "https://github.com/searx/searx",
+    "https://github.com/searx/searx/issues",
+    "https://web.archive.org",
+    "web.archive.org"
+    ]
+    i = 1
+    while nxtpg:
+        nxtpg = False
+        url = 'http://search.disroot.org/search?q=' + query + '&categories=general&pageno=' + str(i) + '&language=en-US'
+        response = urllib.request.urlopen(url)
+        webContent = response.read()
+        soup = BeautifulSoup(str(webContent), 'html.parser')
+        links = soup.find_all('a')
+        nxtpg = len(links) >= 13 #seems to work for disroot searx
+        for j in links:
+            link = j.get("href")
+            textls = j.contents
+            text = createTitle(textls).strip()
+            findPlace(link, text, biglist, blacklist, slist, llist)
+        i += 1
+        time.sleep(3)
+    if(browse):
+        sheader = """
+        <!DOCTYPE html>
+        
+        <html>
+        	<head>
+    	    	<title>Search Results For Small Sites</title>	
+        	</head>
+        	<body>
+        		<h1>Search Results For Small Sites</h1>
+                <ol>"""
+        lheader = """
+        <!DOCTYPE html>
+        
+        <html>
+        	<head>
+        		<title>Search Results For Large Sites</title>	
+        	</head>
+        	<body>
+    		    <h1>Search Results For Large Sites</h1>
+                <ol>"""
+        footer = """        </ol>
+        	</body>
+        </html>
+        """
+        shtml = open("small.html", "w")
+        lhtml = open("large.html", "w")
+        shtml.write(sheader)
+        lhtml.write(lheader)
+        for i in slist:
+            shtml.write("\n<li><a href=" + i[0] + ">" + i[1] + "</a></li>")
+        for i in llist:
+            lhtml.write("\n<li><a href=" + i[0] + ">" + i[1] + "</a></li>")
+        shtml.write(footer)
+        lhtml.write(footer)
+        shtml.close()
+        lhtml.close()
+        webbrowser.open("large.html")
+        webbrowser.open("small.html")
+    else:
+        print("-----RESULTS FOR SMALL SITES-----")
+        for i in slist:
+            print(i[1], "\n\t", i[0], "\n")
+        print("-----RESULTS FOR LARGE SITES-----")
+        for i in llist:
+            print(i[1], "\n\t", i[0], "\n")

@@ -1,0 +1,46 @@
+#!/usr/bin/python
+
+#https://github.com/pistom/hohser
+import json
+import sys
+
+thresh = 400
+datafiles = []
+n = len(sys.argv)
+skip = False
+
+if(n > 1 and (sys.argv[1] == "-h" or sys.argv[1] == "--help")):
+    print("use: j [OPTIONS] [DATAFILES]")
+    print("-t, --threshold: set the threshold for what constitutues a large site; default is 100")
+    print("-h, --help: display this help information and exit. only works if this is the first argument passed. otherwise it is treated as a data file and will probably produce an error")
+    print("any errors in data files entered are essentially ignored")
+    print("see the README for more information")
+else:
+    for arg in range(len(sys.argv)):
+        if(not skip):
+            if(sys.argv[arg] == "-t" or sys.argv[arg] == "--threshold"):
+                try:
+                    thresh = int(sys.argv[arg + 1])
+                    skip = True
+                except Exception as e:
+                    print(e)
+                    print(sys.argv[arg] + " must be followed by an integer number.")
+            elif("j" not in sys.argv[arg]):
+                datafiles.append(sys.argv[arg])
+        else:
+            skip = False
+
+strs = []
+for i in datafiles:
+    f = open(i, "r")
+    lines = f.readlines()
+    for j in lines:
+        try:
+            if(int(j.split()[0]) > thresh):
+                strs.append({"domainName": j.split()[1].strip(), "display": "FULL_HIDE"})
+        except:
+            print("data file failed on line:", j)
+    f.close()
+    
+js = json.dumps(strs)
+print(js)
